@@ -34,9 +34,9 @@ int wmain()
     std::wstring basePath;
     std::getline(std::wcin, basePath);
 
-    std::vector<LineEntry> lines;
+    std::vector<elfreader::LineEntry> lines;
     std::vector<std::string> linesPOUS = {"POUS.c"};
-    ElfReader reader(MyBuildCallback);
+	elfreader::ElfReader reader(MyBuildCallback);
     auto result = reader.ParseDebugLine(std::filesystem::path(basePath), lines, linesPOUS);
 
     for (const auto& entry : lines)
