@@ -34,6 +34,16 @@ using namespace callback;
 
 namespace elfreader
 {
+	typedef struct CLineEntry {
+		char* file;
+		char* address;
+		uint32_t line;
+		int is_stmt;
+		int basic_block;
+		uint32_t view_val;
+	} CLineEntry;
+
+
 	struct MemorySizes {
 		int32_t text = 0;
 		int32_t data = 0;
@@ -61,6 +71,11 @@ namespace elfreader
 		ElfReader(build_callback cb) : m_cb(cb) {}
 		MemorySizes* Analyze(const std::filesystem::path& elfPath);
 		int ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName);
+
+		int GetSymbols(const wchar_t* path, const wchar_t** filters, size_t filterCount,
+			callback::build_callback cb,
+			CLineEntry** outArray, size_t* outCount,
+			const wchar_t* basePathW);
 	private:
 		build_callback m_cb;
 
@@ -79,19 +94,10 @@ namespace elfreader
 
 	extern "C" {
 
-		typedef struct CLineEntry {
-			char* file;
-			char* address;
-			uint32_t line;
-			int is_stmt;
-			int basic_block;
-			uint32_t view_val;
-		} CLineEntry;
-
-		ELFREADER_API int API_ELF GetSymbols(const wchar_t* path, const wchar_t** filters, size_t filterCount,
+		ELFREADER_API int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* basePathW);
+			const wchar_t* path);
 
 		ELFREADER_API void API_ELF FreeSymbols(CLineEntry* arr, size_t count);
 

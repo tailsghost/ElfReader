@@ -427,10 +427,10 @@ namespace elfreader
 
 	extern "C" {
 
-		ELFREADER_API int API_ELF GetSymbols(const wchar_t* path, const wchar_t** filters, size_t filterCount,
+		ELFREADER_API int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* basePathW)
+			const wchar_t* path)
 		{
 			try
 			{
