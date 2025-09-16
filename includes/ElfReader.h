@@ -6,15 +6,15 @@
 #include <NinjaCallback.h>
 
 #ifdef _MSC_VER
-#define API_ELF __stdcall
+#   define API_ELF __stdcall
 #else
-#define API_ELF
-
+#   define API_ELF
 #endif
+
 #ifdef ELFREADER_EXPORTS
-#define ELFREADER_API __declspec(dllexport)
+#   define ELFREADER_API __declspec(dllexport)
 #else
-#define ELFREADER_API __declspec(dllimport)
+#   define ELFREADER_API __declspec(dllimport)
 #endif
 
 #ifdef min
@@ -70,7 +70,7 @@ namespace elfreader
 	public:
 		ElfReader(build_callback cb) : m_cb(cb) {}
 		MemorySizes* Analyze(const std::filesystem::path& elfPath);
-		int ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName);
+		int ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt);
 
 		int GetSymbols(const wchar_t* path, const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
@@ -97,7 +97,7 @@ namespace elfreader
 		ELFREADER_API int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* path);
+			const wchar_t* path, int only_stmt);
 
 		ELFREADER_API void API_ELF FreeSymbols(CLineEntry* arr, size_t count);
 

@@ -152,7 +152,7 @@ namespace elfreader
 		return false;
 	}
 
-	int ElfReader::ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName)
+	int ElfReader::ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt)
 	{
 		ELFIO::elfio reader;
 		if (!reader.load(elfPath.string()))
@@ -323,7 +323,7 @@ namespace elfreader
 								view_val = 0;
 							}
 
-							if (FiltredResult(filteredName, file_list[file_index]))
+							if (FiltredResult(filteredName, file_list[file_index]) && (only_stmt == 0 || is_stmt))
 								out_lines.push_back({ file_list[file_index], ToHexAddr(address), line, is_stmt, basic_block, view_val });
 						}
 						basic_block = false;
@@ -411,7 +411,7 @@ namespace elfreader
 							view_val = 0;
 						}
 
-						if (FiltredResult(filteredName, file_list[file_index]))
+						if (FiltredResult(filteredName, file_list[file_index]) && (only_stmt == 0 || is_stmt))
 							out_lines.push_back({ file_list[file_index], ToHexAddr(address), line, is_stmt, basic_block, view_val });
 					}
 					basic_block = false;
@@ -427,10 +427,10 @@ namespace elfreader
 
 	extern "C" {
 
-		ELFREADER_API int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
+		int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* path)
+			const wchar_t* path, int only_stmt)
 		{
 			try
 			{
@@ -447,9 +447,9 @@ namespace elfreader
 
 				std::vector<LineEntry> results;
 				ElfReader reader(cb);
-				auto result = reader.ParseDebugLine(std::wstring(path), results, filter);
+				auto result = reader.ParseDebugLine(std::wstring(path), results, filter, only_stmt);
 
-				size_t size = results.size();
+				auto size = results.size();
 				if (size == 0)
 				{
 					*outArray = nullptr;
@@ -503,7 +503,7 @@ namespace elfreader
 			}
 		}
 
-		ELFREADER_API int API_ELF ElfAnalyze(const wchar_t* path, callback::build_callback cb, MemorySizes** memory)
+		int API_ELF ElfAnalyze(const wchar_t* path, callback::build_callback cb, MemorySizes** memory)
 		{
 			try
 			{
@@ -530,14 +530,14 @@ namespace elfreader
 		}
 	}
 
-	ELFREADER_API void API_ELF DeleteMemory(MemorySizes* memory)
+	void API_ELF DeleteMemory(MemorySizes* memory)
 	{
 		if (memory) {
 			CoTaskMemFree(memory);
 		}
 	}
 
-	ELFREADER_API void API_ELF FreeSymbols(CLineEntry* arr, size_t count)
+	void API_ELF FreeSymbols(CLineEntry* arr, size_t count)
 	{
 		if (!arr) return;
 		for (size_t i = 0; i < count; ++i)
