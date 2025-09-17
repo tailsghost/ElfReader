@@ -25,8 +25,8 @@ void __stdcall MyBuildCallback(const callback::BuildEvent* ev) {
 
 int wmain()
 {
-	setlocale(LC_ALL, "Russian");
-	PrintLine(L"Введите корневой путь к папке с проектом: ");
+    setlocale(LC_ALL, "Russian");
+    PrintLine(L"Введите путь к Elf файлу: ");
     if (_setmode(_fileno(stdout), _O_U16TEXT) == -1 || _setmode(_fileno(stdin), _O_U16TEXT) == -1) {
         return 1;
     }
@@ -35,9 +35,10 @@ int wmain()
     std::getline(std::wcin, basePath);
 
     std::vector<elfreader::LineEntry> lines;
-    std::vector<std::string> linesPOUS = {"POUS.c"};
-	elfreader::ElfReader reader(MyBuildCallback);
-    auto result = reader.ParseDebugLine(std::filesystem::path(basePath), lines, linesPOUS);
+    std::vector<std::string> linesPOUS = { "POUS.c" };
+    elfreader::ElfReader reader(MyBuildCallback);
+    uint64_t line = 0;
+    auto result = reader.ParseDebugLine(std::filesystem::path(basePath), lines, linesPOUS, 0, line);
 
     for (const auto& entry : lines)
     {

@@ -1,8 +1,5 @@
 ﻿#include <ElfReader.h>
-#include <stdexcept>
-#include <filesystem>
-
-#include <elfio/elfio.hpp>
+#include <Windows.h>
 
 
 namespace elfreader
@@ -152,7 +149,7 @@ namespace elfreader
 		return false;
 	}
 
-	int ElfReader::ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt)
+	int ElfReader::ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt, uint64_t& line)
 	{
 		ELFIO::elfio reader;
 		if (!reader.load(elfPath.string()))
@@ -421,6 +418,38 @@ namespace elfreader
 			offset = unit_end;
 		}
 
+
+		line = FindFunctionLine(reader, "READ_WRITE_EXAMPLE_body__", out_lines);
+
+		return 0;
+	}
+
+	uint64_t ElfReader::FindFunctionLine(ELFIO::elfio& reader, const std::string& funcName, const std::vector<LineEntry>& lines)
+	{
+		const auto symtab = reader.sections[".symtab"];
+		if (!symtab) return 0;
+
+		ELFIO::symbol_section_accessor symbols(reader, symtab);
+		auto symCount = symbols.get_symbols_num();
+
+		for (ELFIO::Elf_Xword i = 0; i < symCount; ++i) {
+			std::string name;
+			ELFIO::Elf64_Addr value = 0;
+			ELFIO::Elf_Xword size = 0;
+			unsigned char bind = 0, type = 0, other = 0;
+			ELFIO::Elf_Half shndx = 0;
+
+			symbols.get_symbol(i, name, value, size, bind, type, shndx, other);
+
+			if (name == funcName) {
+				for (const auto& entry : lines) {
+					uint64_t addr = std::stoull(entry.address, nullptr, 16);
+					if (addr >= value && addr < value + size) {
+						return entry.line;
+					}
+				}
+			}
+		}
 		return 0;
 	}
 
@@ -430,7 +459,7 @@ namespace elfreader
 		int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* path, int only_stmt)
+			const wchar_t* path, int only_stmt, uint64_t& line)
 		{
 			try
 			{
@@ -447,7 +476,7 @@ namespace elfreader
 
 				std::vector<LineEntry> results;
 				ElfReader reader(cb);
-				auto result = reader.ParseDebugLine(std::wstring(path), results, filter, only_stmt);
+				auto result = reader.ParseDebugLine(std::wstring(path), results, filter, only_stmt, line);
 
 				auto size = results.size();
 				if (size == 0)

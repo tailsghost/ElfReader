@@ -5,17 +5,17 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 
 if (POLICY CMP0141)
   cmake_policy(SET CMP0141 NEW)
-endif()
+endif() 
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(ElfReader OBJECT
-    src/ElfReader.cpp)
+add_library(ElfReader SHARED  
+    src/ElfReader.cpp) 
 
 add_executable(ElfReaderTest  
-    src/test.cpp)
+    src/ElfReaderTest.cpp)
 
 target_compile_definitions(ElfReader PRIVATE ELFREADER_EXPORTS)
 

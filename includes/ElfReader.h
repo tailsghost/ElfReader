@@ -1,9 +1,13 @@
 ﻿#pragma once
+#define NOMINMAX
+
+#include <stdexcept>
 #include <filesystem>
 #include <cstdint>
-#include <Windows.h>
 
 #include <NinjaCallback.h>
+
+#include "elfio/elfio.hpp"
 
 #ifdef _MSC_VER
 #   define API_ELF __stdcall
@@ -70,12 +74,17 @@ namespace elfreader
 	public:
 		ElfReader(build_callback cb) : m_cb(cb) {}
 		MemorySizes* Analyze(const std::filesystem::path& elfPath);
-		int ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt);
+		int ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt, uint64_t& line);
 
 		int GetSymbols(const wchar_t* path, const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
 			const wchar_t* basePathW);
+
+		uint64_t FindFunctionLine(
+			ELFIO::elfio& reader,
+			const std::string& funcName,
+			const std::vector<LineEntry>& lines);
 	private:
 		build_callback m_cb;
 
@@ -89,6 +98,7 @@ namespace elfreader
 		static uint64_t ReadAddrBytes(const char* data, size_t size, size_t& offset, size_t n);
 		static std::string ExtractFilename(const std::string& path);
 		static std::string ToHexAddr(uint64_t value);
+
 	};
 
 
@@ -97,7 +107,7 @@ namespace elfreader
 		ELFREADER_API int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* path, int only_stmt);
+			const wchar_t* path, int only_stmt, uint64_t& line);
 
 		ELFREADER_API void API_ELF FreeSymbols(CLineEntry* arr, size_t count);
 
