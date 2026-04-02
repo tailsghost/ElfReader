@@ -6,6 +6,11 @@
 #include <string>
 #include <conio.h>
 
+#include "ElfDwarfParser.h"
+#include "DwarfParser1.h"
+
+using namespace elf_dwarf_parser;
+
 static void PrintLine(const std::wstring& text) {
     DWORD written = 0;
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -22,11 +27,19 @@ void __stdcall MyBuildCallback(const callback::BuildEvent* ev) {
     }
 }
 
+static std::string WStringToAnsi(const std::wstring& wstr) {
+    if (wstr.empty()) return {};
+    int size_needed = WideCharToMultiByte(CP_ACP, 0, wstr.data(), (int)wstr.size(), nullptr, 0, nullptr, nullptr);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_ACP, 0, wstr.data(), (int)wstr.size(), strTo.data(), size_needed, nullptr, nullptr);
+    return strTo;
+}
+
 
 int wmain()
 {
-    setlocale(LC_ALL, "Russian");
-    PrintLine(L"Введите путь к Elf файлу: ");
+	setlocale(LC_ALL, "Russian");
+	PrintLine(L"Введите путь к Elf файлу: ");
     if (_setmode(_fileno(stdout), _O_U16TEXT) == -1 || _setmode(_fileno(stdin), _O_U16TEXT) == -1) {
         return 1;
     }
@@ -35,10 +48,9 @@ int wmain()
     std::getline(std::wcin, basePath);
 
     std::vector<elfreader::LineEntry> lines;
-    std::vector<std::string> linesPOUS = { "POUS.c" };
-    elfreader::ElfReader reader(MyBuildCallback);
-    uint64_t line = 0;
-    auto result = reader.ParseDebugLine(std::filesystem::path(basePath), lines, linesPOUS, 0, line);
+    std::vector<std::string> linesPOUS = {"POUS.c", "POUS.h"};
+	elfreader::ElfReader reader(MyBuildCallback);
+    auto result = reader.ParseDebugLine(std::filesystem::path(basePath), lines, linesPOUS, 0);
 
     for (const auto& entry : lines)
     {
@@ -52,6 +64,12 @@ int wmain()
 
         callback::SendCallback(message.c_str(), Ok, MyBuildCallback);
     }
+
+    ElfDwarfParser parser(MyBuildCallback);
+
+    if (!parser.loadFile(WStringToAnsi(basePath))) return 2;
+    StructInfo struct_;
+    parser.parseStructByName("READ_WRITE_EXAMPLE", struct_);
 
     PrintLine(L"Завершено успешно с кодом: " + std::to_wstring(result));
     std::wcout << L"Нажмите любую клавишу для выхода..." << std::endl;

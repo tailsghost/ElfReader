@@ -1,5 +1,9 @@
-﻿#include <ElfReader.h>
-#include <Windows.h>
+﻿#include "ElfReader.h"
+#include <ElfReader.h>
+
+#include <ElfDwarfParser.h>
+
+#include "HeaderHelpers.h"
 
 
 namespace elfreader
@@ -110,17 +114,6 @@ namespace elfreader
 		mem->binSize = mem->text + mem->data;
 		mem->dec = mem->text + mem->data + mem->bss;
 
-		std::wstringstream ss;
-		ss << L"text=" << mem->text
-			<< L", data=" << mem->data
-			<< L", bss=" << mem->bss
-			<< L", flash=" << mem->flash
-			<< L", ram=" << mem->ram
-			<< L", bin=" << mem->binSize
-			<< L", dec=" << mem->dec;
-
-		SendCallback(ss.str().c_str(), Ok, m_cb);
-
 		return mem;
 	}
 
@@ -149,7 +142,7 @@ namespace elfreader
 		return false;
 	}
 
-	int ElfReader::ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt, uint64_t& line)
+	int ElfReader::ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt)
 	{
 		ELFIO::elfio reader;
 		if (!reader.load(elfPath.string()))
@@ -249,12 +242,12 @@ namespace elfreader
 
 			offset = header_end;
 
-			uint64_t address = 0;
+			uint32_t address = 0;
 			uint32_t line = 1;
 			bool is_stmt = default_is_stmt ? true : false; //считается ли текущая позиция "началом исполняемого оператора" (statement)
 			bool basic_block = false; // Флаг "начало базового блока"
 			size_t file_index = 0;
-			uint64_t sequence_base = UINT64_MAX;
+			uint32_t sequence_base = UINT32_MAX;
 
 			while (offset < unit_end)
 			{
@@ -275,9 +268,9 @@ namespace elfreader
 						line = 1;
 						is_stmt = default_is_stmt ? true : false;
 						file_index = 0;
-						sequence_base = UINT64_MAX;
+						sequence_base = UINT32_MAX;
 						last_emitted_file.clear();
-						last_emitted_address = UINT64_MAX;
+						last_emitted_address = UINT32_MAX;
 						repeat_counter = 0;
 					}
 					else if (ex_opcode == 2) // DW_LNE_set_address
@@ -289,7 +282,7 @@ namespace elfreader
 						else {
 							address = ReadAddrBytes(data, size, offset, addr_bytes);
 						}
-						if (sequence_base == UINT64_MAX) sequence_base = address;
+						if (sequence_base == UINT32_MAX) sequence_base = address;
 					}
 					else
 					{
@@ -320,8 +313,13 @@ namespace elfreader
 								view_val = 0;
 							}
 
+							if (file_list[file_index] == "READ_WRITE_EXAMPLE")
+							{
+
+							}
+
 							if (FiltredResult(filteredName, file_list[file_index]) && (only_stmt == 0 || is_stmt))
-								out_lines.push_back({ file_list[file_index], ToHexAddr(address), line, is_stmt, basic_block, view_val });
+								out_lines.push_back({ file_list[file_index], ToHexAddr(address),address, line, is_stmt, basic_block, view_val });
 						}
 						basic_block = false;
 						break;
@@ -409,7 +407,7 @@ namespace elfreader
 						}
 
 						if (FiltredResult(filteredName, file_list[file_index]) && (only_stmt == 0 || is_stmt))
-							out_lines.push_back({ file_list[file_index], ToHexAddr(address), line, is_stmt, basic_block, view_val });
+							out_lines.push_back({ file_list[file_index], ToHexAddr(address),address, line, is_stmt, basic_block, view_val });
 					}
 					basic_block = false;
 				}
@@ -419,15 +417,14 @@ namespace elfreader
 		}
 
 
-		line = FindFunctionLine(reader, "READ_WRITE_EXAMPLE_body__", out_lines);
-
+		FindFunctionLine(reader, "READ_WRITE_EXAMPLE_body__", out_lines);
 		return 0;
 	}
 
-	uint64_t ElfReader::FindFunctionLine(ELFIO::elfio& reader, const std::string& funcName, const std::vector<LineEntry>& lines)
+	void ElfReader::FindFunctionLine(ELFIO::elfio& reader, const std::string& funcName, std::vector<LineEntry>& lines)
 	{
 		const auto symtab = reader.sections[".symtab"];
-		if (!symtab) return 0;
+		if (!symtab) return;
 
 		ELFIO::symbol_section_accessor symbols(reader, symtab);
 		auto symCount = symbols.get_symbols_num();
@@ -443,14 +440,13 @@ namespace elfreader
 
 			if (name == funcName) {
 				for (const auto& entry : lines) {
-					uint64_t addr = std::stoull(entry.address, nullptr, 16);
-					if (addr >= value && addr < value + size) {
-						return entry.line;
+					if (entry.hexAddress >= value) {
+						entry.isStartFunction = 1;
+						return;
 					}
 				}
 			}
 		}
-		return 0;
 	}
 
 
@@ -459,7 +455,7 @@ namespace elfreader
 		int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* path, int only_stmt, uint64_t& line)
+			const wchar_t* path, int only_stmt)
 		{
 			try
 			{
@@ -476,8 +472,7 @@ namespace elfreader
 
 				std::vector<LineEntry> results;
 				ElfReader reader(cb);
-				auto result = reader.ParseDebugLine(std::wstring(path), results, filter, only_stmt, line);
-
+				auto result = reader.ParseDebugLine(std::wstring(path), results, filter, only_stmt);
 				auto size = results.size();
 				if (size == 0)
 				{
@@ -509,6 +504,8 @@ namespace elfreader
 					arr[i].is_stmt = entry.is_stmt ? 1 : 0;
 					arr[i].basic_block = entry.basic_block ? 1 : 0;
 					arr[i].view_val = entry.view;
+					arr[i].isStartFunction = entry.isStartFunction;
+					arr[i].hexAddress = entry.hexAddress;
 				}
 
 				*outArray = arr;
@@ -575,5 +572,94 @@ namespace elfreader
 			if (arr[i].address) std::free(arr[i].address);
 		}
 		std::free(arr);
+	}
+
+	static MemberInfoC  copy_member(const elf_dwarf_parser::MemberInfo& src)
+	{
+		MemberInfoC dst{};
+		dst.name = stringHelper::AllocCopyWide_CoTask(src.name);
+		dst.type = stringHelper::AllocCopyWide_CoTask(src.type);
+		dst.byte_offset = src.byte_offset;
+		dst.bit_size = src.bit_size;
+
+		dst.fields_count = src.fields.size();
+		if (dst.fields_count > 0)
+		{
+			dst.fields = static_cast<MemberInfoC*>(CoTaskMemAlloc(dst.fields_count * sizeof(MemberInfoC)));
+			for (size_t i = 0; i < dst.fields_count; i++) dst.fields[i] = copy_member(src.fields[i]);
+		}
+
+		return dst;
+	};
+
+
+	static StructInfoC* copy_struct(const elf_dwarf_parser::StructInfo& src)
+	{
+		auto* dst = static_cast<StructInfoC*>(CoTaskMemAlloc(sizeof(StructInfoC)));
+		dst->name = stringHelper::AllocCopyWide_CoTask(src.name);
+		dst->size = src.size;
+		dst->members_count = src.members.size();
+		if (dst->members_count > 0)
+		{
+			dst->members = static_cast<MemberInfoC*>(CoTaskMemAlloc(dst->members_count * sizeof(MemberInfoC)));
+			for (size_t i = 0; i < dst->members_count; i++) dst->members[i] = copy_member(src.members[i]);
+		}
+		else
+		{
+			dst->members = nullptr;
+		}
+
+		return dst;
+	};
+
+
+	static void free_member(MemberInfoC& m)
+	{
+		delete[] m.name;
+		delete[] m.type;
+		for (size_t i = 0; i < m.fields_count; i++) free_member(m.fields[i]);
+
+		delete[] m.fields;
+	};
+
+	static void free_struct(StructInfoC* s)
+	{
+		if (!s) return;
+		delete[] s->name;
+		for (size_t i = 0; i < s->members_count; i++) free_member(s->members[i]);
+
+		delete[] s->members;
+		delete s;
+	};
+
+	static std::string WStringToAnsi(const std::wstring& wstr) {
+		if (wstr.empty()) return {};
+		int size_needed = WideCharToMultiByte(CP_ACP, 0, wstr.data(), (int)wstr.size(), nullptr, 0, nullptr, nullptr);
+		std::string strTo(size_needed, 0);
+		WideCharToMultiByte(CP_ACP, 0, wstr.data(), (int)wstr.size(), strTo.data(), size_needed, nullptr, nullptr);
+		return strTo;
+	}
+
+	int API_ELF GetStructInfo(const wchar_t* path, const wchar_t* structName, StructInfoC** infoC, callback::build_callback cb)
+	{
+		elf_dwarf_parser::ElfDwarfParser parser(cb);
+		std::wstring pathW = path;
+		std::wstring structNameW = structName;
+		auto resultOpen = parser.loadFile(WStringToAnsi(pathW));
+		if (!resultOpen) return -1;
+		elf_dwarf_parser::StructInfo info;
+		auto name = std::string(structNameW.begin(), structNameW.end());
+		auto result = parser.parseStructByName(name, info);
+
+		if (!result) return -2;
+
+		*infoC = copy_struct(info);
+
+		return 0;
+	}
+
+	void API_ELF RemoveStructInfo(StructInfoC* infoC, callback::build_callback cb)
+	{
+		free_struct(infoC);
 	}
 }

@@ -6,7 +6,6 @@
 #include <cstdint>
 
 #include <NinjaCallback.h>
-
 #include "elfio/elfio.hpp"
 
 #ifdef _MSC_VER
@@ -45,7 +44,29 @@ namespace elfreader
 		int is_stmt;
 		int basic_block;
 		uint32_t view_val;
+		uint32_t hexAddress;
+		mutable int32_t isStartFunction;
 	} CLineEntry;
+
+	struct MemberInfoC
+	{
+		const wchar_t* name;
+		const wchar_t* type;
+		uint64_t byte_offset;
+		uint64_t bit_size;
+
+		MemberInfoC* fields;
+		size_t fields_count;
+	};
+
+	struct StructInfoC
+	{
+		const wchar_t* name;
+		uint64_t size;
+
+		MemberInfoC* members;
+		size_t members_count;
+	};
 
 
 	struct MemorySizes {
@@ -62,29 +83,29 @@ namespace elfreader
 	{
 		std::string file;
 		std::string address;
+
+		uint32_t hexAddress;
+
 		uint32_t line;
 		//флаг "statement", является ли данная точка адреса началом исполняемого выражения
 		bool is_stmt;
 		//флаг "начало basic block" (DW_LNS_set_basic_block), эта точка адреса является началом нового basic в машинном коде
 		bool basic_block;
 		uint32_t view;
+
+		mutable int32_t isStartFunction = 0;
 	};
 
 	class ELFREADER_API  ElfReader {
 	public:
 		ElfReader(build_callback cb) : m_cb(cb) {}
 		MemorySizes* Analyze(const std::filesystem::path& elfPath);
-		int ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt, uint64_t& line);
+		int ParseDebugLine(const std::filesystem::path& elfPath, std::vector<LineEntry>& out_lines, std::vector<std::string>& filteredName, int only_stmt);
 
-		int GetSymbols(const wchar_t* path, const wchar_t** filters, size_t filterCount,
-			callback::build_callback cb,
-			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* basePathW);
-
-		uint64_t FindFunctionLine(
+		void FindFunctionLine(
 			ELFIO::elfio& reader,
 			const std::string& funcName,
-			const std::vector<LineEntry>& lines);
+			std::vector<LineEntry>& lines);
 	private:
 		build_callback m_cb;
 
@@ -107,7 +128,7 @@ namespace elfreader
 		ELFREADER_API int API_ELF GetSymbols(const wchar_t** filters, size_t filterCount,
 			callback::build_callback cb,
 			CLineEntry** outArray, size_t* outCount,
-			const wchar_t* path, int only_stmt, uint64_t& line);
+			const wchar_t* path, int only_stmt);
 
 		ELFREADER_API void API_ELF FreeSymbols(CLineEntry* arr, size_t count);
 
@@ -115,5 +136,8 @@ namespace elfreader
 
 
 		ELFREADER_API void API_ELF DeleteMemory(MemorySizes* memory);
+
+		ELFREADER_API int API_ELF GetStructInfo(const wchar_t* path,const wchar_t* structName, StructInfoC** info, callback::build_callback cb);
+		ELFREADER_API void API_ELF RemoveStructInfo(StructInfoC* info, callback::build_callback cb);
 	}
 }
